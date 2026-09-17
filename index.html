@@ -565,7 +565,7 @@
         </div>
         <div class="field">
           <label for="ucapanMsg">Ucapan &amp; Doa</label>
-          <textarea id="ucapanMsg" placeholder="Tulis ucapan dan doa terbaik…" maxlength="600" required></textarea>
+          <textarea id="ucapanMsg" placeholder="Tulis ucapan dan doa terbaik…" maxlength="599" required></textarea>
         </div>
         <button type="submit" class="btn btn-solid" style="width:100%;" id="ucapanSubmitBtn">Kirim Ucapan</button>
         <div class="form-msg" id="ucapanMsgStatus"></div>
@@ -883,6 +883,7 @@
           trackEl.style.animation = "ucapanMarqueeScroll " + duration + "s linear infinite";
         });
       }, function(){
+        marqueeOuter.style.display = "none";
         emptyEl.textContent = "Gagal memuat ucapan.";
         emptyEl.style.display = "";
       });
