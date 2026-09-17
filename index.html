@@ -397,17 +397,41 @@
   .radio-group input{accent-color:var(--brass);}
   .form-msg{margin-top:14px;font-size:13px;color:var(--brass-light);min-height:18px;}
 
-  .ucapan-list{margin-top:34px;display:flex;flex-direction:column;gap:14px;}
+  .ucapan-marquee-outer{
+    margin-top:34px;
+    overflow:hidden;
+    position:relative;
+    -webkit-mask-image:linear-gradient(to right, transparent 0, black 28px, black calc(100% - 28px), transparent 100%);
+    mask-image:linear-gradient(to right, transparent 0, black 28px, black calc(100% - 28px), transparent 100%);
+  }
+  .ucapan-marquee-track{
+    display:flex;
+    gap:14px;
+    width:max-content;
+    will-change:transform;
+  }
   .ucapan-empty{text-align:center;font-size:13.5px;color:rgba(243,236,216,.55);padding:10px 0;}
   .ucapan-card{
     border:1px solid rgba(169,121,60,.4);
     border-radius:10px;
     padding:16px 18px;
     background:rgba(243,236,216,.04);
+    flex:0 0 auto;
+    width:250px;
   }
   .ucapan-card .nm{font-family:var(--font-display);font-size:16px;color:var(--cream);font-weight:500;}
   .ucapan-card .tm{font-size:10.5px;color:rgba(243,236,216,.45);margin-left:8px;}
-  .ucapan-card .ms{font-size:14px;color:rgba(243,236,216,.85);margin-top:6px;line-height:1.55;white-space:pre-wrap;}
+  .ucapan-card .ms{
+    font-size:14px;color:rgba(243,236,216,.85);margin-top:6px;line-height:1.55;white-space:pre-wrap;
+    display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  @keyframes ucapanMarqueeScroll{
+    from{transform:translateX(0);}
+    to{transform:translateX(-50%);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ucapan-marquee-track{animation:none !important;}
+  }
 
   #penutup{text-align:center;}
   #penutup p{max-width:42ch;margin:0 auto 20px;font-size:15px;color:#5b6350;}
@@ -541,9 +565,10 @@
         <div class="form-msg" id="ucapanMsgStatus"></div>
       </form>
 
-      <div id="ucapanList" class="ucapan-list">
-        <div class="ucapan-empty" id="ucapanEmpty">Memuat ucapan…</div>
+      <div id="ucapanMarquee" class="ucapan-marquee-outer">
+        <div id="ucapanTrack" class="ucapan-marquee-track"></div>
       </div>
+      <div class="ucapan-empty" id="ucapanEmpty">Memuat ucapan…</div>
     </div>
   </section>
 
@@ -734,8 +759,14 @@
       return;
     }
 
-    var listEl = document.getElementById("ucapanList");
+    var trackEl = document.getElementById("ucapanTrack");
+    var marqueeOuter = document.getElementById("ucapanMarquee");
     var emptyEl = document.getElementById("ucapanEmpty");
+
+    marqueeOuter.addEventListener("mouseenter", function(){ trackEl.style.animationPlayState = "paused"; });
+    marqueeOuter.addEventListener("mouseleave", function(){ trackEl.style.animationPlayState = "running"; });
+    marqueeOuter.addEventListener("touchstart", function(){ trackEl.style.animationPlayState = "paused"; }, {passive:true});
+    marqueeOuter.addEventListener("touchend", function(){ trackEl.style.animationPlayState = "running"; });
 
     function fmtTime(ts){
       if(!ts || !ts.toDate) return "";
@@ -744,33 +775,49 @@
              d.toLocaleTimeString("id-ID", {hour:"2-digit",minute:"2-digit"});
     }
 
+    function buildCard(data){
+      var card = document.createElement("div");
+      card.className = "ucapan-card";
+      var nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = data.nama || "Tamu";
+      var tm = document.createElement("span");
+      tm.className = "tm";
+      tm.textContent = fmtTime(data.createdAt);
+      var top = document.createElement("div");
+      top.appendChild(nm); top.appendChild(tm);
+      var ms = document.createElement("div");
+      ms.className = "ms";
+      ms.textContent = data.pesan || "";
+      card.appendChild(top);
+      card.appendChild(ms);
+      return card;
+    }
+
     window.ucapanDb.collection("ucapan").orderBy("createdAt","desc").limit(100)
       .onSnapshot(function(snapshot){
-        listEl.querySelectorAll(".ucapan-card").forEach(function(el){ el.remove(); });
+        trackEl.style.animation = "none";
+        trackEl.innerHTML = "";
         if (snapshot.empty){
+          marqueeOuter.style.display = "none";
           emptyEl.textContent = "Jadilah yang pertama memberikan ucapan & doa 💐";
           emptyEl.style.display = "";
           return;
         }
         emptyEl.style.display = "none";
-        snapshot.forEach(function(doc){
-          var data = doc.data();
-          var card = document.createElement("div");
-          card.className = "ucapan-card";
-          var nm = document.createElement("span");
-          nm.className = "nm";
-          nm.textContent = data.nama || "Tamu";
-          var tm = document.createElement("span");
-          tm.className = "tm";
-          tm.textContent = fmtTime(data.createdAt);
-          var top = document.createElement("div");
-          top.appendChild(nm); top.appendChild(tm);
-          var ms = document.createElement("div");
-          ms.className = "ms";
-          ms.textContent = data.pesan || "";
-          card.appendChild(top);
-          card.appendChild(ms);
-          listEl.appendChild(card);
+        marqueeOuter.style.display = "";
+        var docs = [];
+        snapshot.forEach(function(doc){ docs.push(doc.data()); });
+        // set asli
+        docs.forEach(function(data){ trackEl.appendChild(buildCard(data)); });
+        // set duplikat, supaya loop mulus tanpa jeda
+        docs.forEach(function(data){ trackEl.appendChild(buildCard(data)); });
+
+        requestAnimationFrame(function(){
+          var totalWidth = trackEl.scrollWidth / 2;
+          var speedPxPerSec = 36;
+          var duration = Math.max(totalWidth / speedPxPerSec, 10);
+          trackEl.style.animation = "ucapanMarqueeScroll " + duration + "s linear infinite";
         });
       }, function(){
         emptyEl.textContent = "Gagal memuat ucapan.";
