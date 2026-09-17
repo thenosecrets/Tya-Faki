@@ -644,28 +644,50 @@
   });
 
   /* auto-scroll halaman ke bawah setelah undangan dibuka */
-  var autoScrollActive = false;
-  function stopAutoScroll(){ autoScrollActive = false; }
+  var autoScrollEnabled = false;
+  var autoScrollPaused = false;
+  var resumeTimer = null;
+
+  function pauseAutoScroll(){ autoScrollPaused = true; }
+  function resumeAutoScroll(){ if (autoScrollEnabled) autoScrollPaused = false; }
+  function pauseThenResumeLater(){
+    pauseAutoScroll();
+    clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(resumeAutoScroll, 700);
+  }
+
   function startAutoScroll(){
-    autoScrollActive = true;
+    autoScrollEnabled = true;
+    autoScrollPaused = false;
     var lastTime = null;
     var speedPxPerSec = 55;
     function step(now){
-      if (!autoScrollActive) return;
-      if (lastTime !== null){
-        var dt = (now - lastTime) / 1000;
-        window.scrollBy(0, speedPxPerSec * dt);
+      if (!autoScrollEnabled) return;
+      if (autoScrollPaused){
+        lastTime = null; // reset supaya tidak lompat saat lanjut lagi
+      } else {
+        if (lastTime !== null){
+          var dt = (now - lastTime) / 1000;
+          window.scrollBy(0, speedPxPerSec * dt);
+        }
+        lastTime = now;
       }
-      lastTime = now;
       var atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 4);
-      if (atBottom){ autoScrollActive = false; return; }
+      if (atBottom){ autoScrollEnabled = false; return; }
       requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
-  ["wheel","touchmove","keydown"].forEach(function(evt){
-    window.addEventListener(evt, stopAutoScroll, {passive:true});
-  });
+
+  /* sentuhan: freeze selama disentuh, lanjut lagi begitu dilepas */
+  window.addEventListener("touchstart", pauseAutoScroll, {passive:true});
+  window.addEventListener("touchend", resumeAutoScroll, {passive:true});
+  window.addEventListener("touchcancel", resumeAutoScroll, {passive:true});
+  window.addEventListener("mousedown", pauseAutoScroll, {passive:true});
+  window.addEventListener("mouseup", resumeAutoScroll, {passive:true});
+  /* scroll roda mouse / keyboard: freeze, lanjut lagi sesaat setelah berhenti dipakai */
+  window.addEventListener("wheel", pauseThenResumeLater, {passive:true});
+  window.addEventListener("keydown", pauseThenResumeLater);
 
   document.getElementById("openBtn").addEventListener("click", function(){
     cover.classList.add("opened");
